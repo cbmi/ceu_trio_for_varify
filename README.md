@@ -11,6 +11,7 @@ The BAM files are directly from the ubiquitous CEU(Utah) trio.
 ## Usage
 
 ```
+cd /nas/is1/leipzig/CEU_trio_for_varify
 . bin/activate
 snakemake -j 16 vcfs/all.vcf
 ```
