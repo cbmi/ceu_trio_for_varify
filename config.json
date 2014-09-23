@@ -1,5 +1,5 @@
 {
-    "gatk_path":"java -Xmx30G -jar /nas/is1/bin/GATK/3.2-2/GenomeAnalysisTK.jar",
+    "gatk_path":"java -Xmx80G -jar /nas/is1/bin/GATK/3.2-2/GenomeAnalysisTK.jar",
     "references": {
         "genome": "/nas/is1/reference/human/g1k_v37/human_g1k_v37.fasta"
     },
@@ -21,5 +21,6 @@
     },
     "platform": "Illumina",
     "heterozygosity": 0.001,
-    "indel_heterozygosity": 1.25E-4
+    "indel_heterozygosity": 1.25E-4,
+    "range": "20"
 }
