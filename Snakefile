@@ -6,24 +6,19 @@ with open("config.json") as f:
 rule get_bams:
      input: ["bams/"+f+".bam" for f in CONFIG["samples"]]
 
+#exon-targeted bams (~173MB)
+#ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/technical/pilot3_exon_targetted_GRCh37_bams/data/NA12891/alignment/NA12891.chrom22.ILLUMINA.bwa.CEU.exon_targetted.20100311.bam
 rule get_a_bam:
      params: ncbi_ftp = 'ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp', subdir = 'pilot3_exon_targetted_GRCh37_bams', type='exon_targetted', chrom='chrom20', date='20100311'
      output: bam="bams/{bamfile}.bam",bai="bams/{bamfile}.bam.bai"
      shell: """
             curl {params.ncbi_ftp}/technical/{params.subdir}/data/{wildcards.bamfile}/alignment/{wildcards.bamfile}.{params.chrom}.ILLUMINA.bwa.CEU.{params.type}.{params.date}.bam > {output.bam}
-	    curl {params.ncbi_ftp}/technical/{params.subdir}/data/{wildcards.bamfile}/alignment/{wildcards.bamfile}.{params.chrom}.ILLUMINA.bwa.CEU.{params.type}.{params.date}.bam.bai > {output.bai}
+            curl {params.ncbi_ftp}/technical/{params.subdir}/data/{wildcards.bamfile}/alignment/{wildcards.bamfile}.{params.chrom}.ILLUMINA.bwa.CEU.{params.type}.{params.date}.bam.bai > {output.bai}
             """
-
-#     shell: """
-#        curl ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/pilot2_high_cov_GRCh37_bams/data/NA12878/alignment/NA12878.chrom20.ILLUMINA.bwa.CEU.high_coverage.20100311.bam > bams/NA12878.bam
-#	"""
-
-#exon-targeted bams (~173MB)
-#ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/technical/pilot3_exon_targetted_GRCh37_bams/data/NA12891/alignment/NA12891.chrom22.ILLUMINA.bwa.CEU.exon_targetted.20100311.bam
-
 rule all:
     input:
-        "variant_calling/genome/all.snp_recalibrated.indel_recalibrated.vcf"
+        "vcfs/all.filtered.vcf",
+        "vcfs/all.phased.vcf"
 
 rule clean:
      shell: """
@@ -54,12 +49,15 @@ rule gatk_haplotype_caller:
         bams = _gatk_multi_arg("-I", input.bams)
         shell(
             "{params.gatk_path} -T HaplotypeCaller -R {params.ref} -I {input.bams} {params.custom} "
-	    "-L {params.range} "
+	        "-L {params.range} "
             "--emitRefConfidence GVCF --variant_index_type LINEAR "
             "--heterozygosity {CONFIG[heterozygosity]} "
             "--indel_heterozygosity {CONFIG[indel_heterozygosity]} "
             "--dbsnp {CONFIG[known_variants][dbsnp]} -nct {threads} "
-            "--variant_index_parameter 128000 -o {output.gvcf} >& {log}")
+            "--variant_index_parameter 128000 "
+            "-o {output.gvcf} "
+            ">& {log}"
+            )
 
 
 rule gatk_genotyping:
@@ -79,9 +77,14 @@ rule gatk_genotyping:
     run:
         gvcfs = _gatk_multi_arg(" --variant", input.gvcfs)
         shell(
-            "{params.gatk_path} -T GenotypeGVCFs {gvcfs} -nt {threads} {params.custom} "
+            "{params.gatk_path} "
             "-R {params.ref} "
-            "--dbsnp {CONFIG[known_variants][dbsnp]} -o {output} >& {log}")
+            "-T GenotypeGVCFs {gvcfs} "
+            "-nt {threads} {params.custom} "
+            "--dbsnp {CONFIG[known_variants][dbsnp]} "
+            "-o {output} "
+            ">& {log}"
+            )
 
 
 def _get_recal_params(wildcards):
@@ -100,21 +103,61 @@ def _get_recal_params(wildcards):
         ).format(**CONFIG["known_variants"])
 
 
+#hard filtration
+#this "filters out, not filters for" filterExpression
+rule gatk_hard_filtration:
+    input:
+        vcf="vcfs/{filename}.vcf",
+        ref=CONFIG.get("references").get("genome")
+    params:
+        gatk_path=CONFIG.get("gatk_path", ""),
+    output:
+        "vcfs/{filename}.hard.vcf"
+    shell:
+            "{params.gatk_path} "
+            "-R {input.ref} "
+            "-T VariantFiltration "
+            "-o {output} "
+            "--variant {input.vcf} "
+            "--filterExpression \"QD < 2.0 || MQ < 40.0 || FS > 60.0 || HaplotypeScore > 13.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0\" "
+            "--filterName \"GATK3.0-hard-filter\""
+
+rule select_passing:
+    input:
+        vcf="vcfs/{filename}"+CONFIG.get("filter")+".vcf"
+        ref=CONFIG.get("references").get("genome")
+    params:
+        gatk_path=CONFIG.get("gatk_path", ""),
+    output:
+        "vcfs/{filename}.filtered.vcf"
+    shell:
+        "{params.gatk_path}"
+        "-R {input.ref} "
+           -T SelectVariants \
+           -o $@ \
+           --variant $< \
+           --excludeFiltered
+            
+            
+
+
+#VQSR based filtration
+#requires sufficient number of samples and variants YMMV
 rule gatk_variant_recalibration:
     input:
         CONFIG["known_variants"].values(),
         ref=CONFIG.get("references").get("genome"),
-        vcf="vcfs/{prefix}.vcf"
+        vcf="vcfs/{filename}.vcf"
     output:
-        recal=temp("vcfs/{prefix}.{type,(snp|indel)}.recal"),
-        tranches=temp("vcfs/{prefix}.{type,(snp|indel)}.tranches"),
-        plotting=temp("vcfs/{prefix}.{type,(snp|indel)}.plotting.R")
+        recal=temp("vcfs/{filename}.{type,(snp|indel)}.recal"),
+        tranches=temp("vcfs/{filename}.{type,(snp|indel)}.tranches"),
+        plotting=temp("vcfs/{filename}.{type,(snp|indel)}.plotting.R")
     params:
         gatk_path=CONFIG.get("gatk_path", ""),
         recal=_get_recal_params,
         custom=CONFIG.get("params_gatk", "")
     log:
-        "log/{prefix}.{type}_recalibrate_info.log"
+        "log/{filename}.{type}_recalibrate_info.log"
     threads: 8
     shell:
         "{params.gatk_path} -T VariantRecalibrator -R {input.ref} "
@@ -125,27 +168,63 @@ rule gatk_variant_recalibration:
         "-tranchesFile {output.tranches} "
         "-rscriptFile {output.plotting} >& {log}"
 
+#give this a pretty name
+rule vqsr:
+    input:
+        "vcfs/{filename}.snp_recalibrated.indel_recalibrated.vcf"
+    output:
+        "vcfs/{filename}.vqsr.vcf"
+    shell:
+        "mv {input} {output}"
 
+#this rule is smart enough to accept vcfs/all.snp_recalibrated.indel_recalibrated.vcf as a target
 rule gatk_apply_variant_recalibration:
     input:
         ref=CONFIG.get("references").get("genome"),
-        vcf="vcfs/{prefix}.vcf",
-        recal="vcfs/{prefix}.{type}.recal",
-        tranches="vcfs/{prefix}.{type}.tranches"
+        vcf="vcfs/{filename}.vcf",
+        recal="vcfs/{filename}.{type}.recal",
+        tranches="vcfs/{filename}.{type}.tranches"
     output:
-        "vcfs/{prefix}.{type,(snp|indel)}_recalibrated.vcf"
+        "vcfs/{filename}.{type,(snp|indel)}_recalibrated.vcf"
     params:
         gatk_path=CONFIG.get("gatk_path", ""),
         mode=lambda wildcards: wildcards.type.upper(),
         custom=CONFIG.get("params_gatk", "")
     log:
-        "log/{prefix}.{type}_recalibrate.log"
+        "log/{filename}.{type}_recalibrate.log"
     threads: 8
     shell:
-        "{params.gatk_path} -T ApplyRecalibration -R {input.ref} -nt {threads} "
-        "-input {input.vcf} -mode {params.mode} {params.custom} "
-        "-recalFile {input.recal} --ts_filter_level 99.9 "
-        "-tranchesFile {input.tranches} -o {output} >& {log}"
+        "{params.gatk_path} "
+        "-T ApplyRecalibration "
+        "-R {input.ref} "
+        "-nt {threads} "
+        "-input {input.vcf} "
+        "-mode {params.mode} "
+        "{params.custom} "
+        "-recalFile {input.recal} "
+        "--ts_filter_level 99.9 "
+        "-tranchesFile {input.tranches} "
+        "-o {output} "
+        ">& {log}"
+
+rule phase_by_transmission:
+    input:
+        vcf="vcfs/{filename}.filtered.vcf",
+        ref=CONFIG.get("references").get("genome"),
+        ped=CONFIG.get("ped"),
+    params:
+        gatk_path=CONFIG.get("gatk_path", ""),
+    output:
+        vcf="vcfs/{filename}.phased.vcf",
+        mvf="vcfs/{filename}_mendelian_violations.txt"
+    shell:
+        "{params.gatk_path} "
+        "-R {input.ref} "
+        "-T PhaseByTransmission "
+        "--variant {input.vcf} "
+        "-ped {input.ped} "
+        "-mvf {output.mvf} "
+        "-o {output.vcf}"
 
 #rule sample_variant_eval:
 #     input: "input/all.vcf"
