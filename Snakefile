@@ -34,14 +34,14 @@ def _gatk_multi_arg(flag, files):
 rule gatk_haplotype_caller:
     input:
         bams="bams/{sample}.bam"
-    output:
-        gvcf="gvcfs/{sample}.gvcf",
-        idx="gvcfs/{sample}.gvcf.idx"
     params:
         gatk_path=CONFIG.get("gatk_path", ""),
         custom=CONFIG.get("params_gatk", ""),
         ref=CONFIG.get("references").get("genome"),
         range=CONFIG.get("range")
+    output:
+        gvcf="gvcfs/{sample}.gvcf",
+        idx="gvcfs/{sample}.gvcf.idx"
     log:
         "log/{sample}.genotype_info.log"
     threads: 8
@@ -65,12 +65,12 @@ rule gatk_genotyping:
         gvcfs=expand(
             "gvcfs/{sample}.gvcf",
             sample=CONFIG["samples"])
-    output:
-        "vcfs/all.vcf"
     params:
         gatk_path=CONFIG.get("gatk_path", ""),
         ref=CONFIG.get("references").get("genome"),
         custom=CONFIG.get("params_gatk", "")
+    output:
+        "vcfs/all.vcf"
     log:
         "log/all.genotype.log"
     threads: 8
@@ -113,14 +113,17 @@ rule gatk_hard_filtration:
         gatk_path=CONFIG.get("gatk_path", ""),
     output:
         "vcfs/{filename}.hard.vcf"
+    log:
+        "log/{filename}.gatk_hard_filtration.log"
     shell:
-            "{params.gatk_path} "
-            "-R {input.ref} "
-            "-T VariantFiltration "
-            "-o {output} "
-            "--variant {input.vcf} "
-            "--filterExpression \"QD < 2.0 || MQ < 40.0 || FS > 60.0 || HaplotypeScore > 13.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0\" "
-            "--filterName \"GATK3.0-hard-filter\""
+        "{params.gatk_path} "
+        "-R {input.ref} "
+        "-T VariantFiltration "
+        "-o {output} "
+        "--variant {input.vcf} "
+        "--filterExpression \"QD < 2.0 || MQ < 40.0 || FS > 60.0 || HaplotypeScore > 13.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0\" "
+        "--filterName \"GATK3.0-hard-filter\" "
+        ">& {log}"
 
 rule select_passing:
     input:
@@ -130,43 +133,49 @@ rule select_passing:
         gatk_path=CONFIG.get("gatk_path", ""),
     output:
         "vcfs/{filename}.filtered.vcf"
+    log:
+        "log/{filename}.select_passing_variants.log"
     shell:
         "{params.gatk_path}"
         "-R {input.ref} "
-           -T SelectVariants \
-           -o $@ \
-           --variant $< \
-           --excludeFiltered
-            
-            
-
+        " -T SelectVariants "
+        "-o {output} "
+        "--variant {input.vcf} "
+        "--excludeFiltered "
+        ">& {log}"
 
 #VQSR based filtration
 #requires sufficient number of samples and variants YMMV
+#https://www.broadinstitute.org/gatk/gatkdocs/org_broadinstitute_gatk_tools_walkers_variantrecalibration_VariantRecalibrator.php
 rule gatk_variant_recalibration:
     input:
         CONFIG["known_variants"].values(),
         ref=CONFIG.get("references").get("genome"),
         vcf="vcfs/{filename}.vcf"
-    output:
-        recal=temp("vcfs/{filename}.{type,(snp|indel)}.recal"),
-        tranches=temp("vcfs/{filename}.{type,(snp|indel)}.tranches"),
-        plotting=temp("vcfs/{filename}.{type,(snp|indel)}.plotting.R")
     params:
         gatk_path=CONFIG.get("gatk_path", ""),
         recal=_get_recal_params,
         custom=CONFIG.get("params_gatk", "")
+    output:
+        recal=temp("vcfs/{filename}.{type,(snp|indel)}.recal"),
+        tranches=temp("vcfs/{filename}.{type,(snp|indel)}.tranches"),
+        plotting=temp("vcfs/{filename}.{type,(snp|indel)}.plotting.R")
     log:
         "log/{filename}.{type}_recalibrate_info.log"
     threads: 8
     shell:
-        "{params.gatk_path} -T VariantRecalibrator -R {input.ref} "
+        "{params.gatk_path} "
+        "-T VariantRecalibrator "
+        "-R {input.ref} "
         "-input {input.vcf} "
-        "{params.recal} {params.custom} -nt {threads} "
+        "{params.recal} "
+        "{params.custom} "
+        "-nt {threads} "
         "-tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 90.0 "
         "-recalFile {output.recal} "
         "-tranchesFile {output.tranches} "
-        "-rscriptFile {output.plotting} >& {log}"
+        "-rscriptFile {output.plotting} "
+        ">& {log}"
 
 #give this a pretty name
 rule vqsr:
@@ -184,12 +193,12 @@ rule gatk_apply_variant_recalibration:
         vcf="vcfs/{filename}.vcf",
         recal="vcfs/{filename}.{type}.recal",
         tranches="vcfs/{filename}.{type}.tranches"
-    output:
-        "vcfs/{filename}.{type,(snp|indel)}_recalibrated.vcf"
     params:
         gatk_path=CONFIG.get("gatk_path", ""),
         mode=lambda wildcards: wildcards.type.upper(),
         custom=CONFIG.get("params_gatk", "")
+    output:
+        "vcfs/{filename}.{type,(snp|indel)}_recalibrated.vcf"
     log:
         "log/{filename}.{type}_recalibrate.log"
     threads: 8
@@ -207,16 +216,19 @@ rule gatk_apply_variant_recalibration:
         "-o {output} "
         ">& {log}"
 
+#https://www.broadinstitute.org/gatk/gatkdocs/org_broadinstitute_gatk_tools_walkers_phasing_PhaseByTransmission.php
 rule phase_by_transmission:
     input:
         vcf="vcfs/{filename}.filtered.vcf",
         ref=CONFIG.get("references").get("genome"),
-        ped=CONFIG.get("ped"),
+        ped=CONFIG.get("ped")
     params:
-        gatk_path=CONFIG.get("gatk_path", ""),
+        gatk_path=CONFIG.get("gatk_path", "")
     output:
         vcf="vcfs/{filename}.phased.vcf",
         mvf="vcfs/{filename}_mendelian_violations.txt"
+    log:
+        "log/{filename}.{type}_recalibrate.log"
     shell:
         "{params.gatk_path} "
         "-R {input.ref} "
@@ -224,7 +236,8 @@ rule phase_by_transmission:
         "--variant {input.vcf} "
         "-ped {input.ped} "
         "-mvf {output.mvf} "
-        "-o {output.vcf}"
+        "-o {output.vcf} "
+        ">& {log}"
 
 #rule sample_variant_eval:
 #     input: "input/all.vcf"
