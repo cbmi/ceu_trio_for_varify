@@ -49,11 +49,12 @@ rule gatk_haplotype_caller:
         bams = _gatk_multi_arg("-I", input.bams)
         shell(
             "{params.gatk_path} -T HaplotypeCaller -R {params.ref} -I {input.bams} {params.custom} "
-	        "-L {params.range} "
+            "-L {params.range} "
             "--emitRefConfidence GVCF --variant_index_type LINEAR "
             "--heterozygosity {CONFIG[heterozygosity]} "
             "--indel_heterozygosity {CONFIG[indel_heterozygosity]} "
-            "--dbsnp {CONFIG[known_variants][dbsnp]} -nct {threads} "
+            "--dbsnp {CONFIG[known_variants][dbsnp]} "
+            "-nct {threads} "
             "--variant_index_parameter 128000 "
             "-o {output.gvcf} "
             ">& {log}"
@@ -110,7 +111,7 @@ rule gatk_hard_filtration:
         vcf="vcfs/{filename}.vcf",
         ref=CONFIG.get("references").get("genome")
     params:
-        gatk_path=CONFIG.get("gatk_path", ""),
+        gatk_path=CONFIG.get("gatk_path", "")
     output:
         "vcfs/{filename}.hard.vcf"
     log:
@@ -127,16 +128,16 @@ rule gatk_hard_filtration:
 
 rule select_passing:
     input:
-        vcf="vcfs/{filename}"+CONFIG.get("filter")+".vcf"
+        vcf="vcfs/{filename}."+CONFIG.get("filter")+".vcf",
         ref=CONFIG.get("references").get("genome")
     params:
-        gatk_path=CONFIG.get("gatk_path", ""),
+        gatk_path=CONFIG.get("gatk_path", "")
     output:
         "vcfs/{filename}.filtered.vcf"
     log:
         "log/{filename}.select_passing_variants.log"
     shell:
-        "{params.gatk_path}"
+        "{params.gatk_path} "
         "-R {input.ref} "
         " -T SelectVariants "
         "-o {output} "
@@ -157,9 +158,9 @@ rule gatk_variant_recalibration:
         recal=_get_recal_params,
         custom=CONFIG.get("params_gatk", "")
     output:
-        recal=temp("vcfs/{filename}.{type,(snp|indel)}.recal"),
-        tranches=temp("vcfs/{filename}.{type,(snp|indel)}.tranches"),
-        plotting=temp("vcfs/{filename}.{type,(snp|indel)}.plotting.R")
+        recal=temp("vcfs/variant_recal/{filename}.{type,(snp|indel)}.recal"),
+        tranches=temp("vcfs/variant_recal/{filename}.{type,(snp|indel)}.tranches"),
+        plotting=temp("vcfs/variant_recal/{filename}.{type,(snp|indel)}.plotting.R")
     log:
         "log/{filename}.{type}_recalibrate_info.log"
     threads: 8
@@ -191,8 +192,8 @@ rule gatk_apply_variant_recalibration:
     input:
         ref=CONFIG.get("references").get("genome"),
         vcf="vcfs/{filename}.vcf",
-        recal="vcfs/{filename}.{type}.recal",
-        tranches="vcfs/{filename}.{type}.tranches"
+        recal="vcfs/variant_recal/{filename}.{type}.recal",
+        tranches="vcfs/variant_recal/{filename}.{type}.tranches"
     params:
         gatk_path=CONFIG.get("gatk_path", ""),
         mode=lambda wildcards: wildcards.type.upper(),
@@ -228,7 +229,7 @@ rule phase_by_transmission:
         vcf="vcfs/{filename}.phased.vcf",
         mvf="vcfs/{filename}_mendelian_violations.txt"
     log:
-        "log/{filename}.{type}_recalibrate.log"
+        "log/{filename}.phase_by_transmission.log"
     shell:
         "{params.gatk_path} "
         "-R {input.ref} "
