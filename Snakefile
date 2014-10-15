@@ -1,4 +1,5 @@
 import json
+import hashlib
 
 with open("config.json") as f:
     CONFIG = json.load(f)
@@ -18,7 +19,8 @@ rule get_a_bam:
 rule all:
     input:
         "vcfs/all.snpeff.vcf",
-        "vcfs/all.phased.vcf"
+        "vcfs/all.phased.vcf",
+        "all_varify/all.snpeff.vcf"
 
 rule clean:
      shell: """
@@ -256,4 +258,52 @@ rule annotate_dbsnp:
         "log/{filename}.snpeff.log"
     shell:
         "{params.path} -c {params.config} -t hg19 -ud 10 -i vcf -o vcf {input} > {output} "
-        ">& {log}"
+        "2> {log}"
+
+# [general]
+# load = true
+# 
+# [sample]
+# project = CSER
+# batch = CSER_oneoff_sideload
+# version = 0
+# 
+# [vcf]
+# file = patient.snpeff.vcf
+# md5 = cccbfe0deba06654f1243e5ff1b1fb31
+rule varify_manifest:
+    input:
+        vcf="vcfs/{filename}.snpeff.vcf"
+    output:
+        dirname="{filename}_varify",
+        manifest="{filename}_varify/MANIFEST",
+        vcf="{filename}_varify/{filename}.snpeff.vcf"
+    run:
+        with open(input.vcf, 'rb') as vcffilehandle:
+            md5_string = file_md5(vcffilehandle)
+        shell("mkdir -p {0}".format(output.dirname))
+        shell("ln -s ../{0} {1}".format(input.vcf,output.vcf))
+        with open(output.manifest, 'w') as outfile:
+            outfile.write("""
+[general]
+load = true
+
+[sample]
+project = CEU
+batch = CEU
+version = 0
+
+[vcf]
+""")
+            outfile.write("file = {0}\n".format(input.vcf))
+            outfile.write("md5 = {0}\n".format(md5_string))
+
+def file_md5(f, size=8192):
+    "Calculates the MD5 of a file. http://stackoverflow.com/a/1131255/264696"
+    md5 = hashlib.md5()
+    while True:
+        data = f.read(size)
+        if not data:
+            break
+        md5.update(data)
+    return md5.hexdigest()
