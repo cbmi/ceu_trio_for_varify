@@ -3,9 +3,16 @@
     "references": {
         "genome": "/nas/is1/reference/human/g1k_v37/human_g1k_v37.fasta"
     },
+    "snpeff": {
+        "path":
+            "java -Xmx80G -jar /nas/is1/bin/snpeff/3.6cbmi2.0/target/snpEff-3.6-jar-with-dependencies.jar",
+        "config":
+            "/nas/is1/bin/snpeff/3.6cbmi2.0/snpEff.config"
+    },
     "samples": 
         ["NA12878","NA12891","NA12892"]
     ,
+    "ped": "CEU.ped",
     "units": {
         "A":
             ["path/to/A_R1.fastq.gz", "path/to/A_R2.fastq.gz"],
@@ -22,5 +29,6 @@
     "platform": "Illumina",
     "heterozygosity": 0.001,
     "indel_heterozygosity": 1.25E-4,
-    "range": "20"
+    "range": "20",
+    "filter": "hard"
 }

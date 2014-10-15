@@ -17,7 +17,7 @@ rule get_a_bam:
             """
 rule all:
     input:
-        "vcfs/all.filtered.vcf",
+        "vcfs/all.snpeff.vcf",
         "vcfs/all.phased.vcf"
 
 rule clean:
@@ -30,7 +30,7 @@ def _gatk_multi_arg(flag, files):
     flag += " "
     return flag + flag.join(files)
 
-
+#http://bit.ly/1Dc4mXy
 rule gatk_haplotype_caller:
     input:
         bams="bams/{sample}.bam"
@@ -48,7 +48,11 @@ rule gatk_haplotype_caller:
     run:
         bams = _gatk_multi_arg("-I", input.bams)
         shell(
-            "{params.gatk_path} -T HaplotypeCaller -R {params.ref} -I {input.bams} {params.custom} "
+            "{params.gatk_path} "
+            "-T HaplotypeCaller "
+            "-R {params.ref} "
+            "-I {input.bams} "
+            "{params.custom} "
             "-L {params.range} "
             "--emitRefConfidence GVCF --variant_index_type LINEAR "
             "--heterozygosity {CONFIG[heterozygosity]} "
@@ -60,7 +64,7 @@ rule gatk_haplotype_caller:
             ">& {log}"
             )
 
-
+#http://bit.ly/1rcXu3u
 rule gatk_genotyping:
     input:
         gvcfs=expand(
@@ -147,7 +151,7 @@ rule select_passing:
 
 #VQSR based filtration
 #requires sufficient number of samples and variants YMMV
-#https://www.broadinstitute.org/gatk/gatkdocs/org_broadinstitute_gatk_tools_walkers_variantrecalibration_VariantRecalibrator.php
+#http://bit.ly/1w2I72P
 rule gatk_variant_recalibration:
     input:
         CONFIG["known_variants"].values(),
@@ -178,7 +182,7 @@ rule gatk_variant_recalibration:
         "-rscriptFile {output.plotting} "
         ">& {log}"
 
-#give this a pretty name
+#give the recal file a pretty name
 rule vqsr:
     input:
         "vcfs/{filename}.snp_recalibrated.indel_recalibrated.vcf"
@@ -217,7 +221,7 @@ rule gatk_apply_variant_recalibration:
         "-o {output} "
         ">& {log}"
 
-#https://www.broadinstitute.org/gatk/gatkdocs/org_broadinstitute_gatk_tools_walkers_phasing_PhaseByTransmission.php
+#http://bit.ly/1EYgFZk
 rule phase_by_transmission:
     input:
         vcf="vcfs/{filename}.filtered.vcf",
@@ -240,9 +244,16 @@ rule phase_by_transmission:
         "-o {output.vcf} "
         ">& {log}"
 
-#rule sample_variant_eval:
-#     input: "input/all.vcf"
-#     output: "eval.txt"
-#     -comp:1000G_ALL_SITES 1000G_ALL_Sites.vcf.gz
-
-#java -Xmx80G -jar /nas/is1/bin/GATK/3.2-2/GenomeAnalysisTK.jar -R /nas/is1/reference/human/g1k_v37/human_g1k_v37.fasta -T VariantEval -eval vcfs/all.vcf -ST Sample -noEV -EV CountVariants -o myeval.eval
+rule annotate_dbsnp:
+    input:
+        vcf="vcfs/{filename}.filtered.vcf"
+    params:
+        path=CONFIG.get("snpeff").get("path"),
+        config=CONFIG.get("snpeff").get("config")
+    output:
+        vcf="vcfs/{filename}.snpeff.vcf"
+    log:
+        "log/{filename}.snpeff.log"
+    shell:
+        "{params.path} -c {params.config} -t hg19 -ud 10 -i vcf -o vcf {input} > {output} "
+        ">& {log}"
