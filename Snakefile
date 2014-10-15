@@ -5,14 +5,18 @@ with open("config.json") as f:
     CONFIG = json.load(f)
 
 rule get_bams:
-     input: ["bams/"+f+".bam" for f in CONFIG["samples"]]
+    input:
+        ["bams/" + f + ".bam" for f in CONFIG["samples"]]
 
-#exon-targeted bams (~173MB)
-#ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/technical/pilot3_exon_targetted_GRCh37_bams/data/NA12891/alignment/NA12891.chrom22.ILLUMINA.bwa.CEU.exon_targetted.20100311.bam
+# exon-targeted bams (~173MB)
+# ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/technical/pilot3_exon_targetted_GRCh37_bams/data/NA12891/alignment/NA12891.chrom22.ILLUMINA.bwa.CEU.exon_targetted.20100311.bam
 rule get_a_bam:
-     params: ncbi_ftp = 'ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp', subdir = 'pilot3_exon_targetted_GRCh37_bams', type='exon_targetted', chrom='chrom20', date='20100311'
-     output: bam="bams/{bamfile}.bam",bai="bams/{bamfile}.bam.bai"
-     shell: """
+    params:
+        ncbi_ftp = 'ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp', subdir = 'pilot3_exon_targetted_GRCh37_bams', type = 'exon_targetted', chrom = 'chrom20', date = '20100311'
+    output:
+        bam = "bams/{bamfile}.bam", bai = "bams/{bamfile}.bam.bai"
+    shell:
+        """
             curl {params.ncbi_ftp}/technical/{params.subdir}/data/{wildcards.bamfile}/alignment/{wildcards.bamfile}.{params.chrom}.ILLUMINA.bwa.CEU.{params.type}.{params.date}.bam > {output.bam}
             curl {params.ncbi_ftp}/technical/{params.subdir}/data/{wildcards.bamfile}/alignment/{wildcards.bamfile}.{params.chrom}.ILLUMINA.bwa.CEU.{params.type}.{params.date}.bam.bai > {output.bai}
             """
@@ -23,30 +27,33 @@ rule all:
         "all_varify/all.snpeff.vcf"
 
 rule clean:
-     shell: """
+    shell:
+        """
      rm vcfs/*
      rm gvcfs/*
      """
+
 
 def _gatk_multi_arg(flag, files):
     flag += " "
     return flag + flag.join(files)
 
-#http://bit.ly/1Dc4mXy
+# http://bit.ly/1Dc4mXy
 rule gatk_haplotype_caller:
     input:
-        bams="bams/{sample}.bam"
+        bams = "bams/{sample}.bam"
     params:
-        gatk_path=CONFIG.get("gatk_path", ""),
-        custom=CONFIG.get("params_gatk", ""),
-        ref=CONFIG.get("references").get("genome"),
-        range=CONFIG.get("range")
+        gatk_path = CONFIG.get("gatk_path", ""),
+        custom = CONFIG.get("params_gatk", ""),
+        ref = CONFIG.get("references").get("genome"),
+        range = CONFIG.get("range")
     output:
-        gvcf="gvcfs/{sample}.gvcf",
-        idx="gvcfs/{sample}.gvcf.idx"
+        gvcf = "gvcfs/{sample}.gvcf",
+        idx = "gvcfs/{sample}.gvcf.idx"
     log:
         "log/{sample}.genotype_info.log"
-    threads: 8
+    threads:
+        8
     run:
         bams = _gatk_multi_arg("-I", input.bams)
         shell(
@@ -64,23 +71,24 @@ rule gatk_haplotype_caller:
             "--variant_index_parameter 128000 "
             "-o {output.gvcf} "
             ">& {log}"
-            )
+        )
 
-#http://bit.ly/1rcXu3u
+# http://bit.ly/1rcXu3u
 rule gatk_genotyping:
     input:
-        gvcfs=expand(
+        gvcfs = expand(
             "gvcfs/{sample}.gvcf",
             sample=CONFIG["samples"])
     params:
-        gatk_path=CONFIG.get("gatk_path", ""),
-        ref=CONFIG.get("references").get("genome"),
-        custom=CONFIG.get("params_gatk", "")
+        gatk_path = CONFIG.get("gatk_path", ""),
+        ref = CONFIG.get("references").get("genome"),
+        custom = CONFIG.get("params_gatk", "")
     output:
         "vcfs/all.vcf"
     log:
         "log/all.genotype.log"
-    threads: 8
+    threads:
+        8
     run:
         gvcfs = _gatk_multi_arg(" --variant", input.gvcfs)
         shell(
@@ -91,7 +99,7 @@ rule gatk_genotyping:
             "--dbsnp {CONFIG[known_variants][dbsnp]} "
             "-o {output} "
             ">& {log}"
-            )
+        )
 
 
 def _get_recal_params(wildcards):
@@ -110,14 +118,14 @@ def _get_recal_params(wildcards):
         ).format(**CONFIG["known_variants"])
 
 
-#hard filtration
-#this "filters out, not filters for" filterExpression
+# hard filtration
+# this "filters out, not filters for" filterExpression
 rule gatk_hard_filtration:
     input:
-        vcf="vcfs/{filename}.vcf",
-        ref=CONFIG.get("references").get("genome")
+        vcf = "vcfs/{filename}.vcf",
+        ref = CONFIG.get("references").get("genome")
     params:
-        gatk_path=CONFIG.get("gatk_path", "")
+        gatk_path = CONFIG.get("gatk_path", "")
     output:
         "vcfs/{filename}.hard.vcf"
     log:
@@ -134,10 +142,10 @@ rule gatk_hard_filtration:
 
 rule select_passing:
     input:
-        vcf="vcfs/{filename}."+CONFIG.get("filter")+".vcf",
-        ref=CONFIG.get("references").get("genome")
+        vcf = "vcfs/{filename}." + CONFIG.get("filter") + ".vcf",
+        ref = CONFIG.get("references").get("genome")
     params:
-        gatk_path=CONFIG.get("gatk_path", "")
+        gatk_path = CONFIG.get("gatk_path", "")
     output:
         "vcfs/{filename}.filtered.vcf"
     log:
@@ -151,25 +159,28 @@ rule select_passing:
         "--excludeFiltered "
         ">& {log}"
 
-#VQSR based filtration
-#requires sufficient number of samples and variants YMMV
-#http://bit.ly/1w2I72P
+# VQSR based filtration
+# requires sufficient number of samples and variants YMMV
+# http://bit.ly/1w2I72P
 rule gatk_variant_recalibration:
     input:
         CONFIG["known_variants"].values(),
-        ref=CONFIG.get("references").get("genome"),
-        vcf="vcfs/{filename}.vcf"
+        ref = CONFIG.get("references").get("genome"),
+        vcf = "vcfs/{filename}.vcf"
     params:
-        gatk_path=CONFIG.get("gatk_path", ""),
-        recal=_get_recal_params,
-        custom=CONFIG.get("params_gatk", "")
+        gatk_path = CONFIG.get("gatk_path", ""),
+        recal = _get_recal_params,
+        custom = CONFIG.get("params_gatk", "")
     output:
-        recal=temp("vcfs/variant_recal/{filename}.{type,(snp|indel)}.recal"),
-        tranches=temp("vcfs/variant_recal/{filename}.{type,(snp|indel)}.tranches"),
-        plotting=temp("vcfs/variant_recal/{filename}.{type,(snp|indel)}.plotting.R")
+        recal = temp("vcfs/variant_recal/{filename}.{type,(snp|indel)}.recal"),
+        tranches = temp(
+            "vcfs/variant_recal/{filename}.{type,(snp|indel)}.tranches"),
+        plotting = temp(
+            "vcfs/variant_recal/{filename}.{type,(snp|indel)}.plotting.R")
     log:
         "log/{filename}.{type}_recalibrate_info.log"
-    threads: 8
+    threads:
+        8
     shell:
         "{params.gatk_path} "
         "-T VariantRecalibrator "
@@ -184,7 +195,7 @@ rule gatk_variant_recalibration:
         "-rscriptFile {output.plotting} "
         ">& {log}"
 
-#give the recal file a pretty name
+# give the recal file a pretty name
 rule vqsr:
     input:
         "vcfs/{filename}.snp_recalibrated.indel_recalibrated.vcf"
@@ -193,22 +204,24 @@ rule vqsr:
     shell:
         "mv {input} {output}"
 
-#this rule is smart enough to accept vcfs/all.snp_recalibrated.indel_recalibrated.vcf as a target
+# this rule is smart enough to accept
+# vcfs/all.snp_recalibrated.indel_recalibrated.vcf as a target
 rule gatk_apply_variant_recalibration:
     input:
-        ref=CONFIG.get("references").get("genome"),
-        vcf="vcfs/{filename}.vcf",
-        recal="vcfs/variant_recal/{filename}.{type}.recal",
-        tranches="vcfs/variant_recal/{filename}.{type}.tranches"
+        ref = CONFIG.get("references").get("genome"),
+        vcf = "vcfs/{filename}.vcf",
+        recal = "vcfs/variant_recal/{filename}.{type}.recal",
+        tranches = "vcfs/variant_recal/{filename}.{type}.tranches"
     params:
-        gatk_path=CONFIG.get("gatk_path", ""),
-        mode=lambda wildcards: wildcards.type.upper(),
-        custom=CONFIG.get("params_gatk", "")
+        gatk_path = CONFIG.get("gatk_path", ""),
+        mode = lambda wildcards: wildcards.type.upper(),
+        custom = CONFIG.get("params_gatk", "")
     output:
         "vcfs/{filename}.{type,(snp|indel)}_recalibrated.vcf"
     log:
         "log/{filename}.{type}_recalibrate.log"
-    threads: 8
+    threads:
+        8
     shell:
         "{params.gatk_path} "
         "-T ApplyRecalibration "
@@ -223,17 +236,17 @@ rule gatk_apply_variant_recalibration:
         "-o {output} "
         ">& {log}"
 
-#http://bit.ly/1EYgFZk
+# http://bit.ly/1EYgFZk
 rule phase_by_transmission:
     input:
-        vcf="vcfs/{filename}.filtered.vcf",
-        ref=CONFIG.get("references").get("genome"),
-        ped=CONFIG.get("ped")
+        vcf = "vcfs/{filename}.filtered.vcf",
+        ref = CONFIG.get("references").get("genome"),
+        ped = CONFIG.get("ped")
     params:
-        gatk_path=CONFIG.get("gatk_path", "")
+        gatk_path = CONFIG.get("gatk_path", "")
     output:
-        vcf="vcfs/{filename}.phased.vcf",
-        mvf="vcfs/{filename}_mendelian_violations.txt"
+        vcf = "vcfs/{filename}.phased.vcf",
+        mvf = "vcfs/{filename}_mendelian_violations.txt"
     log:
         "log/{filename}.phase_by_transmission.log"
     shell:
@@ -248,12 +261,12 @@ rule phase_by_transmission:
 
 rule annotate_dbsnp:
     input:
-        vcf="vcfs/{filename}.filtered.vcf"
+        vcf = "vcfs/{filename}.filtered.vcf"
     params:
-        path=CONFIG.get("snpeff").get("path"),
-        config=CONFIG.get("snpeff").get("config")
+        path = CONFIG.get("snpeff").get("path"),
+        config = CONFIG.get("snpeff").get("config")
     output:
-        vcf="vcfs/{filename}.snpeff.vcf"
+        vcf = "vcfs/{filename}.snpeff.vcf"
     log:
         "log/{filename}.snpeff.log"
     shell:
@@ -262,16 +275,16 @@ rule annotate_dbsnp:
 
 rule varify_manifest:
     input:
-        vcf="vcfs/{filename}.snpeff.vcf"
+        vcf = "vcfs/{filename}.snpeff.vcf"
     output:
-        dirname="{filename}_varify",
-        manifest="{filename}_varify/MANIFEST",
-        vcf="{filename}_varify/{filename}.snpeff.vcf"
+        dirname = "{filename}_varify",
+        manifest = "{filename}_varify/MANIFEST",
+        vcf = "{filename}_varify/{filename}.snpeff.vcf"
     run:
         with open(input.vcf, 'rb') as vcffilehandle:
             md5_string = file_md5(vcffilehandle)
         shell("mkdir -p {0}".format(output.dirname))
-        shell("ln -s ../{0} {1}".format(input.vcf,output.vcf))
+        shell("ln -s ../{0} {1}".format(input.vcf, output.vcf))
         with open(output.manifest, 'w') as outfile:
             outfile.write("""
 [general]
@@ -286,6 +299,7 @@ version = 0
 """)
             outfile.write("file = {0}\n".format(input.vcf))
             outfile.write("md5 = {0}\n".format(md5_string))
+
 
 def file_md5(f, size=8192):
     "Calculates the MD5 of a file. http://stackoverflow.com/a/1131255/264696"
