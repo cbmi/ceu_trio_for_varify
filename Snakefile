@@ -260,17 +260,6 @@ rule annotate_dbsnp:
         "{params.path} -c {params.config} -t hg19 -ud 10 -i vcf -o vcf {input} > {output} "
         "2> {log}"
 
-# [general]
-# load = true
-# 
-# [sample]
-# project = CSER
-# batch = CSER_oneoff_sideload
-# version = 0
-# 
-# [vcf]
-# file = patient.snpeff.vcf
-# md5 = cccbfe0deba06654f1243e5ff1b1fb31
 rule varify_manifest:
     input:
         vcf="vcfs/{filename}.snpeff.vcf"
