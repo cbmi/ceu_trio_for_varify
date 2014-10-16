@@ -1,13 +1,14 @@
 {
-    "gatk_path":"java -Xmx80G -jar /nas/is1/bin/GATK/3.2-2/GenomeAnalysisTK.jar",
+    "java_cmd": "java -Xmx80G -jar"
+    "gatk_path":"/nas/is1/bin/GATK/3.2-2/GenomeAnalysisTK.jar",
     "references": {
         "genome": "/nas/is1/reference/human/g1k_v37/human_g1k_v37.fasta"
     },
     "snpeff": {
         "path":
-            "java -Xmx80G -jar /nas/is1/bin/snpeff/3.6cbmi2.0/target/snpEff-3.6-jar-with-dependencies.jar",
+            "snpEff.jar",
         "config":
-            "/nas/is1/bin/snpeff/3.6cbmi2.0/snpEff.config"
+            "snpEff/snpEff.config"
     },
     "samples": 
         ["NA12878","NA12891","NA12892"]
