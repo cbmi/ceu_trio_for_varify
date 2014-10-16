@@ -11,15 +11,13 @@ The BAM files are directly from the ubiquitous CEU(Utah) trio.
 This borrows heavily from [The Snakemake Workflow Repository](https://bitbucket.org/johanneskoester/snakemake-workflows).
 
 ## Resources
-* ftp://gsapubftp-anonymous@ftp.broadinstitute.org//bundle/2.8/b37/hapmap_3.3.b37.vcf.gz &
+* ftp://gsapubftp-anonymous@ftp.broadinstitute.org//bundle/2.8/b37/hapmap_3.3.b37.vcf.gz
 * ftp://gsapubftp-anonymous@ftp.broadinstitute.org//bundle/2.8/b37/1000G_phase1.snps.high_confidence.b37.vcf.gz
 * ftp://gsapubftp-anonymous@ftp.broadinstitute.org//bundle/2.8/b37/1000G_omni2.5.b37.vcf.gz
 * ftp://gsapubftp-anonymous@ftp.broadinstitute.org//bundle/2.8/b37/Mills_and_1000G_gold_standard.indels.b37.vcf.gz
 
 ## Usage
-`config.json` should be altered as needed.
-
-`filter`: can be set to `hard` or `vqsr`
+`config.json` should be altered as needed. In particular, `filter`: can be set to `hard` or `vqsr`
 
 ```
 cd /nas/is1/leipzig/CEU_trio_for_varify
@@ -28,7 +26,10 @@ mkdir vcfs gvcfs log bams gatk_resources
 snakemake -j 3 all
 ```
 ## Output
-If there is intermediate output you need, make it a target, otherwise it will be deleted by Snakemake
+If there is intermediate output you need, make it a target, otherwise it will be deleted by Snakemake.
+
+The following output will be produced from `snakemake all`
+
 * `all_varify` directory with Manifest ready for Varify
 * `all.snpeff.vcf` - SnpEff-CBMi annotated, filtered VCF
 * `all.phased.vcf` & `all_mendelian_violations.txt` - a pedigree phased VCF and MVs
