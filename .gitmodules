@@ -1,0 +1,3 @@
+[submodule "snpEff"]
+	path = snpEff
+	url = https://github.com/CBMi-BiG/snpEff
