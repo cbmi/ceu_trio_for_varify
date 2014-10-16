@@ -43,6 +43,7 @@ rule gatk_haplotype_caller:
     input:
         bams = "bams/{sample}.bam"
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", ""),
         custom = CONFIG.get("params_gatk", ""),
         ref = CONFIG.get("references").get("genome"),
@@ -57,6 +58,7 @@ rule gatk_haplotype_caller:
     run:
         bams = _gatk_multi_arg("-I", input.bams)
         shell(
+            "{params.java_cmd} "
             "{params.gatk_path} "
             "-T HaplotypeCaller "
             "-R {params.ref} "
@@ -80,6 +82,7 @@ rule gatk_genotyping:
             "gvcfs/{sample}.gvcf",
             sample=CONFIG["samples"])
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", ""),
         ref = CONFIG.get("references").get("genome"),
         custom = CONFIG.get("params_gatk", "")
@@ -92,6 +95,7 @@ rule gatk_genotyping:
     run:
         gvcfs = _gatk_multi_arg(" --variant", input.gvcfs)
         shell(
+            "{params.java_cmd} "
             "{params.gatk_path} "
             "-R {params.ref} "
             "-T GenotypeGVCFs {gvcfs} "
@@ -125,12 +129,14 @@ rule gatk_hard_filtration:
         vcf = "vcfs/{filename}.vcf",
         ref = CONFIG.get("references").get("genome")
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", "")
     output:
         "vcfs/{filename}.hard.vcf"
     log:
         "log/{filename}.gatk_hard_filtration.log"
     shell:
+        "{params.java_cmd} "
         "{params.gatk_path} "
         "-R {input.ref} "
         "-T VariantFiltration "
@@ -145,12 +151,14 @@ rule select_passing:
         vcf = "vcfs/{filename}." + CONFIG.get("filter") + ".vcf",
         ref = CONFIG.get("references").get("genome")
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", "")
     output:
         "vcfs/{filename}.filtered.vcf"
     log:
         "log/{filename}.select_passing_variants.log"
     shell:
+        "{params.java_cmd} "
         "{params.gatk_path} "
         "-R {input.ref} "
         " -T SelectVariants "
@@ -168,6 +176,7 @@ rule gatk_variant_recalibration:
         ref = CONFIG.get("references").get("genome"),
         vcf = "vcfs/{filename}.vcf"
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", ""),
         recal = _get_recal_params,
         custom = CONFIG.get("params_gatk", "")
@@ -182,6 +191,7 @@ rule gatk_variant_recalibration:
     threads:
         8
     shell:
+        "{params.java_cmd} "
         "{params.gatk_path} "
         "-T VariantRecalibrator "
         "-R {input.ref} "
@@ -213,6 +223,7 @@ rule gatk_apply_variant_recalibration:
         recal = "vcfs/variant_recal/{filename}.{type}.recal",
         tranches = "vcfs/variant_recal/{filename}.{type}.tranches"
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", ""),
         mode = lambda wildcards: wildcards.type.upper(),
         custom = CONFIG.get("params_gatk", "")
@@ -223,6 +234,7 @@ rule gatk_apply_variant_recalibration:
     threads:
         8
     shell:
+        "{params.java_cmd} "
         "{params.gatk_path} "
         "-T ApplyRecalibration "
         "-R {input.ref} "
@@ -243,6 +255,7 @@ rule phase_by_transmission:
         ref = CONFIG.get("references").get("genome"),
         ped = CONFIG.get("ped")
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", "")
     output:
         vcf = "vcfs/{filename}.phased.vcf",
@@ -250,6 +263,7 @@ rule phase_by_transmission:
     log:
         "log/{filename}.phase_by_transmission.log"
     shell:
+        "{params.java_cmd} "
         "{params.gatk_path} "
         "-R {input.ref} "
         "-T PhaseByTransmission "
@@ -263,6 +277,7 @@ rule annotate_dbsnp:
     input:
         vcf = "vcfs/{filename}.filtered.vcf"
     params:
+        java_cmd = CONFIG.get("java_cmd", ""),
         path = CONFIG.get("snpeff").get("path"),
         config = CONFIG.get("snpeff").get("config")
     output:
@@ -270,7 +285,14 @@ rule annotate_dbsnp:
     log:
         "log/{filename}.snpeff.log"
     shell:
-        "{params.path} -c {params.config} -t hg19 -ud 10 -i vcf -o vcf {input} > {output} "
+        "{params.java_cmd} "
+        "{params.path} "
+        "-c {params.config} "
+        "-t hg19 "
+        "-ud 10 "
+        "-i vcf "
+        "-o vcf {input} "
+        "> {output} "
         "2> {log}"
 
 rule varify_manifest:
