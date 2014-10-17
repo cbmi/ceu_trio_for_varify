@@ -38,10 +38,18 @@ def _gatk_multi_arg(flag, files):
     flag += " "
     return flag + flag.join(files)
 
+rule get_ranges:
+    output: "ranges.list"
+    shell:
+        """
+        ./genesToRanges.py > {output}
+        """
+
 # http://bit.ly/1Dc4mXy
 rule gatk_haplotype_caller:
     input:
-        bams = "bams/{sample}.bam"
+        bams = "bams/{sample}.bam",
+        ranges = "ranges.list"
     params:
         java_cmd = CONFIG.get("java_cmd", ""),
         gatk_path = CONFIG.get("gatk_path", ""),
@@ -64,7 +72,7 @@ rule gatk_haplotype_caller:
             "-R {params.ref} "
             "-I {input.bams} "
             "{params.custom} "
-            "-L {params.range} "
+            "-L {input.ranges} "
             "--emitRefConfidence GVCF --variant_index_type LINEAR "
             "--heterozygosity {CONFIG[heterozygosity]} "
             "--indel_heterozygosity {CONFIG[indel_heterozygosity]} "
@@ -319,7 +327,7 @@ version = 0
 
 [vcf]
 """)
-            outfile.write("file = {0}\n".format(input.vcf))
+            outfile.write("file = {0}.snpeff.vcf\n".format(wildcards.filename))
             outfile.write("md5 = {0}\n".format(md5_string))
 
 
