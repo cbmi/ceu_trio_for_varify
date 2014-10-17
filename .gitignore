@@ -1,0 +1,10 @@
+.snakemake/
+all_varify/
+bams/
+gvcfs/
+log/
+gatk_resources/
+vcfs/
+.dir_bash_history
+bin/
+lib/

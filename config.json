@@ -6,7 +6,7 @@
     },
     "snpeff": {
         "path":
-            "snpEff.jar",
+            "snpEff/snpEff.jar",
         "config":
             "snpEff/snpEff.config"
     },
