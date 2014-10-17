@@ -1,5 +1,5 @@
 {
-    "java_cmd": "java -Xmx80G -jar"
+    "java_cmd": "java -Xmx80G -jar",
     "gatk_path":"/nas/is1/bin/GATK/3.2-2/GenomeAnalysisTK.jar",
     "references": {
         "genome": "/nas/is1/reference/human/g1k_v37/human_g1k_v37.fasta"
