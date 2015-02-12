@@ -320,6 +320,10 @@ rule varify_manifest:
 [general]
 load = true
 
+[genome]
+name = Genome Reference Consortium GRCh37
+version = hg19
+
 [sample]
 project = CEU
 batch = CEU
